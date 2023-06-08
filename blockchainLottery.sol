@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.7.0 <0.9.0;
-contract Bibliotics {
+contract Blockchain_lottery {
     //базисные структуры
 
 
@@ -12,6 +12,7 @@ contract Bibliotics {
          uint ticketprice;
 
          uint wieners_part_of_all;
+         uint amount_of_participants;
 
          string start_date;
          string extra_info;
@@ -22,10 +23,17 @@ contract Bibliotics {
 
 
 
-     mapping (uint => mapping (address => uint)) approval;
+     mapping (uint => mapping (uint => uint)) partisipant_tickets;
+     mapping (uint => mapping (uint => address)) partisipant;
    
 
      uint amount_of_loteries = 0;
+
+    function random(uint a) private view returns (uint256) {
+    uint randomHash =  uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp)));
+    return (randomHash%(a-1)+1);
+
+    }
      
 
     // полномочия админа
@@ -48,7 +56,7 @@ contract Bibliotics {
         require(msg.value== _start_found_in_wei,"please, match sending summ and starting foundation");
 
 
-        lottery_code[amount_of_loteries]= lottery(_name,  _start_found_in_wei, _wieners_pie_in_percents, _ticketprice_in_wei, _wieners_part_of_all_in_percents, _start_date, _extra_info);
+        lottery_code[amount_of_loteries]= lottery(_name,  _start_found_in_wei, _wieners_pie_in_percents, _ticketprice_in_wei, _wieners_part_of_all_in_percents,0, _start_date, _extra_info);
         amount_of_loteries++;
 
         return(amount_of_loteries-1);
@@ -60,9 +68,15 @@ contract Bibliotics {
     }
 
     function buy_a_lottery_ticket(uint _lottery_id, uint _amount_of_tickets)public payable{
-        require(0<_lottery_id && _lottery_id<(amount_of_loteries-1), "no such lottery exists");
+        require(_lottery_id<amount_of_loteries, "no such lottery exists");
         require(msg.value== lottery_code[_lottery_id].ticketprice * _amount_of_tickets,"please,match tickets' cost and transfering summ");
-        approval[_lottery_id][msg.sender]+= _amount_of_tickets;
+        
+        partisipant_tickets[_lottery_id][lottery_code[_lottery_id].amount_of_participants]= _amount_of_tickets;
+        partisipant[_lottery_id][lottery_code[_lottery_id].amount_of_participants]=msg.sender;
+
+
+        lottery_code[_lottery_id].amount_of_participants+=1;
+        lottery_code[_lottery_id].foundation+= lottery_code[_lottery_id].ticketprice * _amount_of_tickets;
     
     }
 
@@ -70,11 +84,38 @@ contract Bibliotics {
 
     //инициация лотереи и ее отмена
     function initialise_a_lottery(uint _lottery_id) public{
-        require(0<_lottery_id && _lottery_id<(amount_of_loteries-1), "no such lottery exists");
+        require (_lottery_id<amount_of_loteries, "no such lottery exists");
         require(admin==msg.sender,"only admin can initialise a lottery");
-        
 
+        //передача необеспеченной доли админу
+        payable(admin).transfer(lottery_code[_lottery_id].foundation*(100-lottery_code[_lottery_id].wieners_pie)/100);
+        //рассчет числа купленных билетов на данную лотерею
+        uint line=0;
+
+        for(uint i=0;i<lottery_code[_lottery_id].amount_of_participants;i++){
+            line+=partisipant_tickets[_lottery_id][i];
+        }
+
+        uint lineX=line;
+
+        //цикл до числа раз= числу билетов * часть выигрышных билетов
+        for(uint i=0; i< lineX*lottery_code[_lottery_id].wieners_part_of_all/100;i++){
+           uint k = random(line); //случайное к от 1 до числа билетов
+           uint b=0; //счетчик маркера
+
+            while(k>0){
+                k-=partisipant_tickets[_lottery_id][b];//цикл последовательно идет от записи к записи, вычитая из к число билетов на записи, двигая счетчик по вооброжаемой "линии рулетки" с отрезками-долями участников
+                b++;
+            }
+            //обнаружена запись b на которой счетчик упал - прошло число билетов = к
+            partisipant_tickets[_lottery_id][b]--; //удаление победившего билета из записи
+            line--;
+
+            payable(partisipant[_lottery_id][b]).transfer(lottery_code[_lottery_id].foundation*(lottery_code[_lottery_id].wieners_pie)/lineX/lottery_code[_lottery_id].wieners_part_of_all); //перевод доли 1/число победителей от обеспечения победителю
+
+        }
 
 
     }
+    
 }
