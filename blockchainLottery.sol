@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.7.0 <0.9.0;
+pragma experimental ABIEncoderV2;
+
 contract Blockchain_lottery {
     //базисные структуры
 
@@ -29,8 +31,8 @@ contract Blockchain_lottery {
 
      uint amount_of_loteries = 0;
 
-    function random(uint a) private view returns (uint256) {
-    uint randomHash =  uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp)));
+    function random(int a) private view returns (int) {
+    int randomHash =  int(keccak256(abi.encodePacked(block.difficulty, block.timestamp)));
     return (randomHash%(a-1)+1);
 
     }
@@ -60,10 +62,11 @@ contract Blockchain_lottery {
         amount_of_loteries++;
 
         return(amount_of_loteries-1);
-            }
+    }
 
     //партисипация и данные о лотереe
     function view_lottery(uint _lottery_id) public view returns(lottery memory){
+        require(_lottery_id<amount_of_loteries, "no such lottery exists");
         return lottery_code[_lottery_id];
     }
 
@@ -83,39 +86,40 @@ contract Blockchain_lottery {
 
 
     //инициация лотереи и ее отмена
-    function initialise_a_lottery(uint _lottery_id) public{
+    function initialise_a_lottery(uint _lottery_id) public {
         require (_lottery_id<amount_of_loteries, "no such lottery exists");
         require(admin==msg.sender,"only admin can initialise a lottery");
 
         //передача необеспеченной доли админу
         payable(admin).transfer(lottery_code[_lottery_id].foundation*(100-lottery_code[_lottery_id].wieners_pie)/100);
         //рассчет числа купленных билетов на данную лотерею
-        uint line=0;
+         uint line=0;
 
-        for(uint i=0;i<lottery_code[_lottery_id].amount_of_participants;i++){
-            line+=partisipant_tickets[_lottery_id][i];
-        }
+         for(uint i=0;i<=lottery_code[_lottery_id].amount_of_participants;i++){
+             line+=partisipant_tickets[_lottery_id][i];
+         }
 
-        uint lineX=line;
+         uint lineX=line;
+        
 
-        //цикл до числа раз= числу билетов * часть выигрышных билетов
-        for(uint i=0; i< lineX*lottery_code[_lottery_id].wieners_part_of_all/100;i++){
-           uint k = random(line); //случайное к от 1 до числа билетов
-           uint b=0; //счетчик маркера
+         //цикл до числа раз= числу билетов * часть выигрышных билетов
+         for(uint i=0; i< (lineX*lottery_code[_lottery_id].wieners_part_of_all/100)+1;i++){
+            int k = random(int(line)); //случайное к от 1 до числа билетов
+            uint b=0; //счетчик маркера
 
-            while(k>0){
-                k-=partisipant_tickets[_lottery_id][b];//цикл последовательно идет от записи к записи, вычитая из к число билетов на записи, двигая счетчик по вооброжаемой "линии рулетки" с отрезками-долями участников
-                b++;
-            }
-            //обнаружена запись b на которой счетчик упал - прошло число билетов = к
-            partisipant_tickets[_lottery_id][b]--; //удаление победившего билета из записи
-            line--;
+             while(k>0){
+                 k=k -int(partisipant_tickets[_lottery_id][b]);//цикл последовательно идет от записи к записи, вычитая из к число билетов на записи, двигая счетчик по вооброжаемой "линии рулетки" с отрезками-долями участников
+                 b++;
+             }
+    //обнаружена запись b на которой счетчик упал <0 - прошло число билетов = к
+             partisipant_tickets[_lottery_id][b-1]--; //удаление победившего билета из записи
+             line--;
 
-            payable(partisipant[_lottery_id][b]).transfer(lottery_code[_lottery_id].foundation*(lottery_code[_lottery_id].wieners_pie)/lineX/lottery_code[_lottery_id].wieners_part_of_all); //перевод доли 1/число победителей от обеспечения победителю
-
+            payable(partisipant[_lottery_id][b-1]).transfer(lottery_code[_lottery_id].foundation*(lottery_code[_lottery_id].wieners_pie)/100/(lineX*lottery_code[_lottery_id].wieners_part_of_all/100+1)); //перевод доли 1/число победителей от обеспечения победителю
+            
         }
 
 
     }
-    
+
 }
